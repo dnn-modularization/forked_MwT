@@ -7,7 +7,7 @@ import random
 
 import torch
 from torch import nn
-
+from tqdm import tqdm
 from configs import Configs
 from models_cnnsplitter.rescnn_masked import ResCNN as mt_rescnn_model
 
@@ -101,31 +101,44 @@ def generate_trackable_params(raw_model_params):
     unique_number = 0
     for param_name, params in raw_model_params.items():
         numel = params.numel()  # Total number of elements in the tensor
-        new_tensor = torch.arange(unique_number, unique_number + numel, dtype=torch.float64)
+        new_tensor = torch.arange(unique_number, unique_number + numel, dtype=torch.float64, device=DEVICE)
         unique_number += numel
         trackable_model_params[param_name] = new_tensor.view(params.shape)
+
+    all_flattened = torch.cat([p.flatten() for p in trackable_model_params.values()])
+    unique_flattened = torch.unique(all_flattened)
+    assert len(unique_flattened) == unique_number, (
+        f"Expected {unique_number} unique values, got {len(unique_flattened)}"
+    )
 
     return trackable_model_params
 
 
 def calculate_overlap_params(modules, model_param_count):
     flatten_module_params = []
-    for i, m in enumerate(modules):
-        flatten_param_set = set()
-        # for p in m.parameters():
-        for p in m.float64_param.values():
-            flatten_param_set.update(p.view(-1).tolist())
+    for m in tqdm(modules, desc="Flattening module params"):
+        flatten_param_list = []
+        assert next(iter(m.float64_param.values())).dtype == torch.float64, \
+            "m.float64_param must be float64 to keep the uniqueness of the ids, " \
+            "float32 will give duplicate ids as its range is limited"
+        flatten_param_list = torch.cat([p.view(-1) for p in m.float64_param.values()]).int().tolist()
+        flatten_param_set = set(flatten_param_list)
+        # Check uniqueness
+        assert len(flatten_param_set) == len(flatten_param_list), f"Non-unique params in module {i}"
         flatten_module_params.append(flatten_param_set)
+
+        del m
 
     # Calculate all combinations of modules
     indices_combinations = list(itertools.combinations(range(len(flatten_module_params)), 2))
 
     # 357 = sampling from population of [4950 indices_combinations] with confidence level of 95%, margin of error 5%
-    # indices_combinations = random.sample(indices_combinations, k=357)
+    if len(flatten_module_params) == 100:
+        indices_combinations = random.sample(indices_combinations, k=357)
 
     print("indices_combinations", len(indices_combinations))
     overlap_sizes = []
-    for module1_index, module2_index in indices_combinations:
+    for module1_index, module2_index in tqdm(indices_combinations, desc="Calculating overlaps"):
         module1_params = flatten_module_params[module1_index]
         module2_params = flatten_module_params[module2_index]
         curr_intersection = len(module1_params & module2_params)
@@ -150,12 +163,20 @@ def main():
 if __name__ == '__main__':
     # print(args)
     # print('-' * 100)
-    # model_name = "vgg16"
-    model_name = "resnet18"
-    # model_name = "mobilenet"
-    # dataset_name, num_classes = "svhn", 10
-    dataset_name, num_classes = "cifar10", 10
-    # dataset_name, num_classes = "cifar100", 100
+    parser = argparse.ArgumentParser(description="Module Analysis")
+    parser.add_argument('--model_name', type=str, default="vgg16", choices=["vgg16", "resnet18", "mobilenet"], help="Model architecture")
+    parser.add_argument('--dataset_name', type=str, default="imagenet", choices=["svhn", "cifar10", "cifar100", "imagenet"], help="Dataset name")
+    args = parser.parse_args()
+
+    model_name = args.model_name
+    dataset_name = args.dataset_name
+
+    if dataset_name in ["cifar10", "svhn"]:
+        num_classes = 10
+    elif dataset_name in ["cifar100", "imagenet"]:
+        num_classes = 100
+    else:
+        raise ValueError(f"Unknown dataset_name: {dataset_name}")
 
     # THRESHOLD = args.threshold
     # target_classes = args.target_classes

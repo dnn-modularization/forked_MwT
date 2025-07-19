@@ -20,7 +20,7 @@ torch.backends.cudnn.deterministic = True
 
 class Configs:
     def __init__(self):
-        self.root_dir = '{need_to_set}/Modularizing_while_Training_DNN'
+        self.root_dir = '/home/ubuntu/forked_MwT_Dog100'
         self.data_dir = f'{self.root_dir}/data'
         self.dataset_dir = f'{self.data_dir}/dataset'
         self.tensorboard_dir = f'{self.data_dir}/tensorboard_log'

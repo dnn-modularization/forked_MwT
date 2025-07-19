@@ -11,7 +11,7 @@ import os
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from configs import Configs
-from dataset_loader import load_cifar10, load_svhn, load_cifar100
+from dataset_loader import load_cifar10, load_svhn, load_cifar100, load_imagenet
 from model_utils import print_model_summary
 from standard_trainer import cal_modular_metrics
 
@@ -20,7 +20,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=['vgg16', 'resnet18', 'mobilenet',
                                                       'simcnn', 'rescnn'], required=True)
-    parser.add_argument('--dataset', type=str, choices=['cifar10', 'svhn', 'cifar100'], required=True)
+    parser.add_argument('--dataset', type=str, choices=['cifar10', 'svhn', 'cifar100', 'imagenet'], required=True)
 
     parser.add_argument('--lr_model', type=float, default=0.05)
     # parser.add_argument('--lr_mask', type=float, default=0.05)
@@ -193,6 +193,8 @@ def main():
                                               num_workers=num_workers)
     elif dataset_name == 'cifar100':
         train_loader, test_loader = load_cifar100(configs.dataset_dir, batch_size=batch_size, num_workers=num_workers)
+    elif dataset_name == 'imagenet':
+        train_loader, test_loader = load_imagenet(configs.dataset_dir, batch_size=batch_size, num_workers=num_workers)
     else:
         raise ValueError
 
@@ -220,7 +222,7 @@ if __name__ == '__main__':
     args = get_args()
     print(args)
     DEVICE = torch.device('cuda')
-    num_workers = 2
+    num_workers = 20
 
     model_name = args.model
     dataset_name = args.dataset

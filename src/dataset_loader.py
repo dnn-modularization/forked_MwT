@@ -1,9 +1,9 @@
+from pathlib import Path
 import numpy as np
 import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
-from torchvision.datasets import CIFAR10, SVHN, CIFAR100
-
+from torchvision.datasets import ImageFolder, CIFAR10, SVHN, CIFAR100
 
 def load_cifar100(dataset_dir, batch_size, num_workers):
     normalize = transforms.Normalize(mean=[0.5071, 0.4867, 0.4408], std=[0.2675, 0.2565, 0.2761])
@@ -162,6 +162,105 @@ def load_svhn_target_class(dataset_dir, batch_size, num_workers, target_classes,
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=True)
     return train_loader, test_loader
 
+
+_IMAGENET_MEAN = [0.485, 0.456, 0.406]
+_IMAGENET_STD = [0.229, 0.224, 0.225]
+
+def _get_transforms():
+    normalize = transforms.Normalize(mean=_IMAGENET_MEAN, std=_IMAGENET_STD)
+    train_tf = transforms.Compose([
+        transforms.RandomResizedCrop(224),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        normalize,
+    ])
+    val_tf = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        normalize,
+    ])
+    return train_tf, val_tf
+
+class ImageNetFolder(ImageFolder):
+    def __init__(self, root, transform=None):
+        super().__init__(root=root, transform=transform)
+        self.imgs    = self.samples
+        self.data    = np.array([path for path, _ in self.samples])
+        self.targets = np.array([label for _, label in self.samples])
+
+def load_imagenet(dataset_dir, batch_size, num_workers):
+    dataset_dir = f"{dataset_dir}/imagenet"
+    normalize = transforms.Normalize(mean=_IMAGENET_MEAN, std=_IMAGENET_STD)
+    train_transform = transforms.Compose([
+        transforms.RandomResizedCrop(224),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        normalize,
+    ])
+    val_transform   = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        normalize,
+    ])
+
+    train_dataset = ImageNetFolder(root=str(Path(dataset_dir)/'train'),
+                                   transform=train_transform)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size,
+                              shuffle=True, num_workers=num_workers,
+                              pin_memory=True)
+
+    val_dataset = ImageNetFolder(root=str(Path(dataset_dir)/'val'),
+                                 transform=val_transform)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size,
+                            num_workers=num_workers,
+                            pin_memory=True)
+
+    return train_loader, val_loader
+
+def load_imagenet_target_class(dataset_dir, batch_size, num_workers,
+                               target_classes, transform_label=True):
+    dataset_dir = f"{dataset_dir}/imagenet"
+    normalize = transforms.Normalize(mean=_IMAGENET_MEAN, std=_IMAGENET_STD)
+    train_transform = transforms.Compose([
+        transforms.RandomResizedCrop(224),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        normalize,
+    ])
+    val_transform   = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        normalize,
+    ])
+
+    train_dataset = ImageNetFolder(root=str(Path(dataset_dir)/'train'),
+                                   transform=train_transform)
+    t = np.array(train_dataset.targets)
+    idx = np.isin(t, target_classes)
+    labs = t[idx].tolist()
+    train_dataset.targets = ([target_classes.index(l) for l in labs]
+                             if transform_label else labs)
+    train_dataset.data = train_dataset.data[idx]
+    train_loader = DataLoader(train_dataset, batch_size=batch_size,
+                              shuffle=True, num_workers=num_workers,
+                              pin_memory=True)
+
+    val_dataset = ImageNetFolder(root=str(Path(dataset_dir)/'val'),
+                                 transform=val_transform)
+    t = np.array(val_dataset.targets)
+    idx = np.isin(t, target_classes)
+    labs = t[idx].tolist()
+    val_dataset.targets = ([target_classes.index(l) for l in labs]
+                           if transform_label else labs)
+    val_dataset.data = val_dataset.data[idx]
+    val_loader = DataLoader(val_dataset, batch_size=batch_size,
+                            num_workers=num_workers,
+                            pin_memory=True)
+
+    return train_loader, val_loader
 
 if __name__ == '__main__':
     for tc in range(10):

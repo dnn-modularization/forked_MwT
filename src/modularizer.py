@@ -36,7 +36,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=['vgg16', 'resnet18', 'mobilenet',
                                                       'simcnn', 'rescnn'], required=True)
-    parser.add_argument('--dataset', type=str, choices=['cifar10', 'svhn', 'cifar100'], required=True)
+    parser.add_argument('--dataset', type=str, choices=['cifar10', 'svhn', 'cifar100', 'imagenet'], required=True)
 
     parser.add_argument('--lr_model', type=float, default=0.05)
     # parser.add_argument('--lr_mask', type=float, default=0.05)

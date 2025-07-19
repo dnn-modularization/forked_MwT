@@ -91,7 +91,7 @@ class MobileNet(nn.Module):
             block_i = getattr(self, f'conv_block_{i}')
             out = block_i(out)
 
-        out = F.avg_pool2d(out, 2)
+        out = F.adaptive_avg_pool2d(out, 1)
         out = out.view(out.size(0), -1)
         out = self.fc(out)
         return out

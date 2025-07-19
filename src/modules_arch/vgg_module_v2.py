@@ -43,7 +43,8 @@ class VGG(nn.Module):
         super(VGG, self).__init__()
         self.features = features
         self.classifier = nn.Sequential(
-            nn.Linear(n_last_conv_kernels, 4096),
+            # nn.Linear(n_last_conv_kernels, 4096),
+            nn.Linear(n_last_conv_kernels*7*7, 4096),
             # nn.Linear(512 * 7 * 7, 4096),
             nn.ReLU(True),
             # nn.Dropout(),
@@ -186,10 +187,25 @@ def get_module_param(module, module_layer_masks, model_param, keep_generator=Tru
     assert masked_conv_idx == len(module_layer_masks)
 
     # modify the first Linear layer's input dimension
-    previous_retrained_kernel_indices = torch.nonzero(module_layer_masks[-1], as_tuple=True)[0]
     layer_param_name = 'classifier.0.weight'
     model_linear_weight = model_param[layer_param_name]
-    module_param[layer_param_name] = model_linear_weight[:, previous_retrained_kernel_indices]
+    # module_param[layer_param_name] = model_linear_weight[:, previous_retrained_kernel_indices]
+    
+    if model_linear_weight.shape[1] != module_layer_masks[-1].shape[0]:
+        # For Imagenet mismatch dim [Conv-to-FC transition]: expand channel mask to match flattened input
+        prev_conv_mask = module_layer_masks[-1]
+        prev_conv_original_output_channels = prev_conv_mask.shape[0]
+        prev_conv_spatial_size = model_linear_weight.shape[1] // prev_conv_mask.shape[0]
+        prev_conv_spatial_h = prev_conv_spatial_w = int(prev_conv_spatial_size ** 0.5)
+        mask_3d = prev_conv_mask.view(prev_conv_original_output_channels, 1, 1).expand(prev_conv_original_output_channels, prev_conv_spatial_h, prev_conv_spatial_w)
+        expanded_mask = torch.flatten(mask_3d, 0)
+        previous_retrained_kernel_indices = torch.nonzero(expanded_mask, as_tuple=True)[0]
+    else:
+        previous_retrained_kernel_indices = torch.nonzero(module_layer_masks[-1], as_tuple=True)[0]
+    
+    module_param[layer_param_name] = model_linear_weight[:, previous_retrained_kernel_indices]    
+
+
 
     if not keep_generator:
         new_module_param = {}
